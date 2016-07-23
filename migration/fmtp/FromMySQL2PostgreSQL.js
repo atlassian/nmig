@@ -59,7 +59,8 @@ const self         = {
     _pipeWidth           : 0,
     _targetConString     : '',
     _dataPool            : [],
-    _dicTables           : {}
+    _dicTables           : {},
+    _outputFile          : null
 };
 
 /**
@@ -122,6 +123,9 @@ function boot() {
                                     isIntNumeric(self._config.pipe_width)
                                     ? Math.abs(+self._config.pipe_width)
                                     : self._maxPoolSizeTarget;
+
+        self._outputFile  =       fs.createWriteStream("bamboo_db.sql");
+        self._outputFile.open();
 
         self._pipeWidth           = self._pipeWidth > self._maxPoolSizeTarget ? self._maxPoolSizeTarget : self._pipeWidth;
 
@@ -773,16 +777,21 @@ function processForeignKeyWorker(tableName, rows) {
     return new Promise(resolve => {
         let constraintsPromises = [];
         let objConstraints      = Object.create(null);
+        let quote = quoteCharacter(tableName);
+        let quotedTableName = quoteTableName(tableName, quote);
+
+
 
         for (let i = 0; i < rows.length; ++i) {
+            let referencedTableQuote = quoteCharacter(rows[i].REFERENCED_TABLE_NAME);
             if (rows[i].CONSTRAINT_NAME in objConstraints) {
-                objConstraints[rows[i].CONSTRAINT_NAME].column_name.push('"' + rows[i].COLUMN_NAME + '"');
-                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name.push('"' + rows[i].REFERENCED_COLUMN_NAME + '"');
+                objConstraints[rows[i].CONSTRAINT_NAME].column_name.push(quote + rows[i].COLUMN_NAME + quote);
+                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name.push(referencedTableQuote + rows[i].REFERENCED_COLUMN_NAME + referencedTableQuote);
             } else {
                 objConstraints[rows[i].CONSTRAINT_NAME]                        = Object.create(null);
-                objConstraints[rows[i].CONSTRAINT_NAME].column_name            = ['"' + rows[i].COLUMN_NAME + '"'];
-                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name = ['"' + rows[i].REFERENCED_COLUMN_NAME + '"'];
-                objConstraints[rows[i].CONSTRAINT_NAME].referenced_table_name  = rows[i].REFERENCED_TABLE_NAME;
+                objConstraints[rows[i].CONSTRAINT_NAME].column_name            = [quote + rows[i].COLUMN_NAME + quote];
+                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name = [referencedTableQuote + rows[i].REFERENCED_COLUMN_NAME + referencedTableQuote];
+                objConstraints[rows[i].CONSTRAINT_NAME].referenced_table_name  = referencedTableQuote + rows[i].REFERENCED_TABLE_NAME + referencedTableQuote;
                 objConstraints[rows[i].CONSTRAINT_NAME].update_rule            = rows[i].UPDATE_RULE;
                 objConstraints[rows[i].CONSTRAINT_NAME].delete_rule            = rows[i].DELETE_RULE;
             }
@@ -800,9 +809,9 @@ function processForeignKeyWorker(tableName, rows) {
                             generateError('\t--[processForeignKeyWorker] Cannot connect to PostgreSQL server...');
                             resolveConstraintPromise();
                         } else {
-                            let sql = 'ALTER TABLE "' + self._schema + '"."' + tableName + '" ADD FOREIGN KEY ('
-                                    + objConstraints[attr].column_name.join(',') + ') REFERENCES "' + self._schema + '"."'
-                                    + objConstraints[attr].referenced_table_name + '" (' + objConstraints[attr].referenced_column_name.join(',')
+                            let sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName + ' ADD FOREIGN KEY ('
+                                    + objConstraints[attr].column_name.join(',') + ') REFERENCES "' + self._schema + '".'
+                                    + objConstraints[attr].referenced_table_name + ' (' + objConstraints[attr].referenced_column_name.join(',')
                                     + ') ON UPDATE ' + objConstraints[attr].update_rule + ' ON DELETE ' + objConstraints[attr].delete_rule + ';';
 
                             objConstraints[attr] = null;
@@ -873,6 +882,16 @@ function runVacuumFullAndAnalyze() {
     });
 }
 
+function quoteCharacter(tableName) {
+    if (tableName.substring(0, 3) == "AO_")
+        return '"';
+    return '';
+}
+
+function quoteTableName(tableName, quote) {
+    return quote + tableName + quote;
+}
+
 /**
  * Migrates structure of a single table to PostgreSql server.
  *
@@ -884,6 +903,9 @@ function createTable(tableName) {
         () => {
             return new Promise((resolveCreateTable, rejectCreateTable) => {
                 log('\t--[createTable] Currently creating table: `' + tableName + '`', self._dicTables[tableName].tableLogPath);
+                let quote = quoteCharacter(tableName);
+                let quotedTableName = quoteTableName(tableName, quote);
+
                 self._mysql.getConnection((error, connection) => {
                     if (error) {
                         // The connection is undefined.
@@ -904,12 +926,12 @@ function createTable(tableName) {
                                         generateError('\t--[createTable] Cannot connect to PostgreSQL server...\n' + error, sql);
                                         rejectCreateTable();
                                     } else {
-                                        sql                                        = 'CREATE TABLE "' + self._schema + '"."' + tableName + '"(';
+                                        sql                                        = 'CREATE TABLE "' + self._schema + '".' + quotedTableName + '(';
                                         self._dicTables[tableName].arrTableColumns = rows;
 
                                         for (let i = 0; i < rows.length; ++i) {
                                             let strConvertedType  = mapDataTypes(self._dataTypesMap, rows[i].Type);
-                                            sql                  += '"' + rows[i].Field + '" ' + strConvertedType + ',';
+                                            sql                  += quote + rows[i].Field + quote + ' ' + strConvertedType + ',';
                                         }
 
                                         rows = null;
@@ -962,6 +984,7 @@ function populateTableWorker(tableName, strSelectFieldList, offset, rowsInChunk,
                     } else {
                         let csvAddr = self._tempDirPath + '/' + tableName + offset + '.csv';
                         let sql     = 'SELECT ' + strSelectFieldList + ' FROM `' + tableName + '` LIMIT ' + offset + ',' + rowsInChunk + ';';
+                        let quotedTableName = quoteTableName(tableName, quoteCharacter(tableName));
 
                         connection.query(sql, (err, rows) => {
                             connection.release();
@@ -1001,7 +1024,7 @@ function populateTableWorker(tableName, strSelectFieldList, offset, rowsInChunk,
                                                                 generateError('\t--[populateTableWorker] Cannot connect to PostgreSQL server...\n' + error, sql);
                                                                 resolvePopulateTableWorker();
                                                             } else {
-                                                                sql = 'COPY "' + self._schema + '"."' + tableName + '" FROM '
+                                                                sql = 'COPY "' + self._schema + '".' + quotedTableName + ' FROM '
                                                                     + '\'' + csvAddr + '\' DELIMITER \'' + ',\'' + ' CSV;';
 
                                                                 client.query(sql, (err, result) => {
@@ -1088,6 +1111,7 @@ function populateTableByInsert(tableName, strSelectFieldList, offset, rowsInChun
                         generateError('\t--[populateTableByInsert] Cannot connect to MySQL server...\n\t' + error);
                         resolve();
                     } else {
+                        let quotedTableName = quoteTableName(tableName, quoteCharacter(tableName));
                         let sql = 'SELECT ' + strSelectFieldList + ' FROM `' + tableName + '` LIMIT ' + offset + ',' + rowsInChunk + ';';
                         connection.query(sql, (err, rows) => {
                             connection.release();
@@ -1108,7 +1132,7 @@ function populateTableByInsert(tableName, strSelectFieldList, offset, rowsInChun
                                                     generateError(msg);
                                                     resolveInsert();
                                                 } else {
-                                                    let sql                = 'INSERT INTO "' + self._schema + '"."' + tableName + '"';
+                                                    let sql                = 'INSERT INTO "' + self._schema + '".' + quotedTableName;
                                                     let valuesPlaceHolders = ' VALUES(';
                                                     let valuesData         = [];
                                                     let cnt                = 1;
@@ -1177,8 +1201,10 @@ function processEnum(tableName) {
                                     generateError(msg);
                                     resolveProcessEnum();
                                 } else {
-                                    let sql = 'ALTER TABLE "' + self._schema + '"."' + tableName + '" '
-                                            + 'ADD CHECK ("' + self._dicTables[tableName].arrTableColumns[i].Field + '" IN (' + arrType[1] + ');';
+                                    let quote = quoteCharacter(tableName);
+                                    let quotedTableName = quoteTableName(tableName, quote);
+                                    let sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName + ' '
+                                            + 'ADD CHECK ('+ quote + self._dicTables[tableName].arrTableColumns[i].Field + quote + ' IN (' + arrType[1] + ');';
 
                                     client.query(sql, err => {
                                         done();
@@ -1232,8 +1258,10 @@ function processNull(tableName) {
                                 generateError(msg);
                                 resolveProcessNull();
                             } else {
-                                let sql = 'ALTER TABLE "' + self._schema + '"."' + tableName
-                                        + '" ALTER COLUMN "' + self._dicTables[tableName].arrTableColumns[i].Field + '" SET NOT NULL;';
+                                let quote = quoteCharacter(tableName);
+                                let quotedTableName = quoteTableName(tableName, quote);
+                                let sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName
+                                        + ' ALTER COLUMN ' + quote + self._dicTables[tableName].arrTableColumns[i].Field + quote + ' SET NOT NULL;';
 
                                 client.query(sql, err => {
                                     done();
@@ -1300,8 +1328,10 @@ function processDefault(tableName) {
                                 generateError(msg);
                                 resolveProcessDefault();
                             } else {
-                                let sql = 'ALTER TABLE "' + self._schema + '"."' + tableName
-                                        + '" ' + 'ALTER COLUMN "' + self._dicTables[tableName].arrTableColumns[i].Field + '" SET DEFAULT ';
+                                let quote = quoteCharacter(tableName);
+                                let quotedTableName = quoteTableName(tableName, quote);
+                                let sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName
+                                        + ' ' + 'ALTER COLUMN '+ quote + self._dicTables[tableName].arrTableColumns[i].Field + quote + ' SET DEFAULT ';
 
                                 if (sqlReservedValues[self._dicTables[tableName].arrTableColumns[i].Default]) {
                                     sql += sqlReservedValues[self._dicTables[tableName].arrTableColumns[i].Default] + ';';
@@ -1364,7 +1394,10 @@ function createSequence(tableName) {
                                 generateError(msg);
                                 resolveCreateSequence();
                             } else {
-                                let sql = 'CREATE SEQUENCE "' + self._schema + '"."' + seqName + '";';
+                                let quote = quoteCharacter(tableName);
+                                let quotedTableName = quoteTableName(tableName, quote);
+
+                                let sql = 'CREATE SEQUENCE "' + self._schema + '".'+ quote + seqName + quote + ';';
                                 client.query(sql, err => {
                                     if (err) {
                                         done();
@@ -1372,9 +1405,9 @@ function createSequence(tableName) {
                                         generateError(errMsg, sql);
                                         resolveCreateSequence();
                                     } else {
-                                         sql = 'ALTER TABLE "' + self._schema + '"."' + tableName + '" '
-                                             + 'ALTER COLUMN "' + self._dicTables[tableName].arrTableColumns[i].Field + '" '
-                                             + 'SET DEFAULT NEXTVAL(\'"' + self._schema + '"."' + seqName + '"\');';
+                                         sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName + ' '
+                                             + 'ALTER COLUMN ' + quote + self._dicTables[tableName].arrTableColumns[i].Field + quote + ' '
+                                             + 'SET DEFAULT NEXTVAL(\'"' + self._schema + '".'+ quote + seqName + quote + '\');';
 
                                          client.query(sql, err2 => {
                                              if (err2) {
@@ -1386,9 +1419,9 @@ function createSequence(tableName) {
                                                  generateError(err2Msg, sql);
                                                  resolveCreateSequence();
                                              } else {
-                                                   sql = 'ALTER SEQUENCE "' + self._schema + '"."' + seqName + '" '
-                                                       + 'OWNED BY "' + self._schema + '"."' + tableName
-                                                       + '"."' + self._dicTables[tableName].arrTableColumns[i].Field + '";';
+                                                   sql = 'ALTER SEQUENCE "' + self._schema + '".' + quote + seqName + quote + ' '
+                                                       + 'OWNED BY "' + self._schema + '".' + quotedTableName
+                                                       + '.' + quote + self._dicTables[tableName].arrTableColumns[i].Field + quote + ';';
 
                                                    client.query(sql, err3 => {
                                                         if (err3) {
@@ -1400,9 +1433,9 @@ function createSequence(tableName) {
                                                             generateError(err3Msg, sql);
                                                             resolveCreateSequence();
                                                         } else {
-                                                           sql = 'SELECT SETVAL(\'"' + self._schema + '"."' + seqName + '"\', '
-                                                               + '(SELECT MAX("' + self._dicTables[tableName].arrTableColumns[i].Field + '") FROM "'
-                                                               + self._schema + '"."' + tableName + '"));';
+                                                           sql = 'SELECT SETVAL(\'"' + self._schema + '".' + quote + seqName + quote + '\', '
+                                                               + '(SELECT MAX(' + quote + self._dicTables[tableName].arrTableColumns[i].Field + quote +') FROM "'
+                                                               + self._schema + '".' + quotedTableName + '));';
 
                                                            client.query(sql, err4 => {
                                                               done();
@@ -1452,6 +1485,8 @@ function processIndexAndKey(tableName) {
                     generateError('\t--[processIndexAndKey] Cannot connect to MySQL server...\n\t' + error);
                     resolveProcessIndexAndKey();
                 } else {
+                    let quote = quoteCharacter(tableName);
+                    let quotedTableName = quoteTableName(tableName, quote);
                     let sql = 'SHOW INDEX FROM `' + tableName + '`;';
                     connection.query(sql, (err, arrIndices) => {
                         connection.release();
@@ -1471,7 +1506,7 @@ function processIndexAndKey(tableName) {
                                 } else {
                                     objPgIndices[arrIndices[i].Key_name] = {
                                         is_unique   : arrIndices[i].Non_unique === 0 ? true : false,
-                                        column_name : ['"' + arrIndices[i].Column_name + '"'],
+                                        column_name : [quote + arrIndices[i].Column_name + quote],
                                         Index_type  : ' USING ' + (arrIndices[i].Index_type === 'SPATIAL' ? 'GIST' : arrIndices[i].Index_type)
                                     };
                                 }
@@ -1489,7 +1524,7 @@ function processIndexAndKey(tableName) {
                                             } else {
                                                 if (attr.toLowerCase() === 'primary') {
                                                     indexType = 'PK';
-                                                    sql       = 'ALTER TABLE "' + self._schema + '"."' + tableName + '" '
+                                                    sql       = 'ALTER TABLE "' + self._schema + '".' + quotedTableName + ' '
                                                               + 'ADD PRIMARY KEY(' + objPgIndices[attr].column_name.join(',') + ');';
 
                                                 } else {
