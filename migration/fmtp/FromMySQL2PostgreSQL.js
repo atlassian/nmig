@@ -1034,6 +1034,7 @@ function populateTableWorker(tableName, strSelectFieldList, offset, rowsInChunk,
                                                                         generateError('\t--[populateTableWorker] ' + err, sql);
 
                                                                         if (self._copyOnly.indexOf(tableName) === -1) {
+                                                                            log("Falling back to insert");
                                                                             populateTableByInsert(tableName, strSelectFieldList, offset, rowsInChunk, () => {
                                                                                 let msg = '\t--[populateTableWorker]  For now inserted: ' + self._dicTables[tableName].totalRowsInserted + ' rows, '
                                                                                         + 'Total rows to insert into "' + self._schema + '"."' + tableName + '": ' + rowsCnt;

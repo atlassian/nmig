@@ -7,7 +7,7 @@
     "source" : {
             "host"     : "localhost",
             "port"     : 3306,
-            "database" : "bamboo",
+            "database" : "allegro",
             "charset"  : "UTF8",
             "user"     : "root",
             "password" : "passwd"
@@ -26,22 +26,22 @@
     "target" : {
             "host"     : "localhost",
             "port"     : 5432,
-            "database" : "test_db",
+            "database" : "allegro",
             "charset"  : "UTF8",
-            "user"     : "bamboo",
-            "password" : "bamboo"
+            "user"     : "my_root",
+            "password" : "my_root"
     },
     
     "max_pool_size_target_description" : [
         "Maximal amount of simultaneous connections to your PostgreSQL database during migration"
     ],
-    "max_pool_size_target" : 10,
+    "max_pool_size_target" : 20,
 
     "pipe_width_description" : [
         "Maximal amount of data-chunks, processed in a single 'DataPipe' iteration.",
         "Note: 'pipe_width' should not be greater than 'max_pool_size_target'."
     ],
-    "pipe_width" : 10,
+    "pipe_width" : 20,
     
     "encoding_description" : [
         "JavaScript encoding type.",
@@ -59,7 +59,7 @@
         "During migration each table's data will be split into chunks of data_chunk_size (in KB).",
         "If not supplied, then 100 KB will be used as a default."
     ],
-    "data_chunk_size" : 100,
+    "data_chunk_size" : 10000,
 
     "copy_only_description" : [
         "During migration each table's data will be split into chunks, and each chunk will be transmitted via COPY protocol.",

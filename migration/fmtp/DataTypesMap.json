@@ -13,9 +13,9 @@
     ],
 
     "bit" : {
-        "increased_size"           : "bit varying",
-        "type"                     : "bit varying",
-        "mySqlVarLenPgSqlFixedLen" : false
+        "increased_size"           : "boolean",
+        "type"                     : "boolean",
+        "mySqlVarLenPgSqlFixedLen" : true 
     },
 
     "year" : {
@@ -26,7 +26,7 @@
 
     "tinyint" : {
         "increased_size"           : "int",
-        "type"                     : "smallint",
+        "type"                     : "boolean",
         "mySqlVarLenPgSqlFixedLen" : true
     },
 
