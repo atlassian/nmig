@@ -859,7 +859,8 @@ function runVacuumFullAndAnalyze() {
                                 generateError('\t--[runVacuumFullAndAnalyze] Cannot connect to PostgreSQL server...');
                                 resolveVacuum();
                             } else {
-                                let sql = 'VACUUM (FULL, ANALYZE) "' + self._schema + '"."' + self._tablesToMigrate[i] + '";';
+                                let quotedTableName = quoteTableName(self._tablesToMigrate[i], quoteCharacter(self._tablesToMigrate[i]));
+                                let sql = 'VACUUM (FULL, ANALYZE) "' + self._schema + '".' + quotedTableName + ';';
                                 client.query(sql, err => {
                                     done();
 
@@ -1287,10 +1288,6 @@ function processNull(tableName) {
                     })
                 );
             }
-            else
-            {
-                log( self._dicTables[tableName].arrTableColumns[i].Field + "is nullable: " + self._dicTables[tableName].arrTableColumns[i].Null, self._dicTables[tableName].tableLogPath);
-            }
         }
 
         Promise.all(processNullPromises).then(() => resolve());
@@ -1508,7 +1505,7 @@ function processIndexAndKey(tableName) {
 
                             for (let i = 0; i < arrIndices.length; ++i) {
                                 if (arrIndices[i].Key_name in objPgIndices) {
-                                    objPgIndices[arrIndices[i].Key_name].column_name.push('"' + arrIndices[i].Column_name + '"');
+                                    objPgIndices[arrIndices[i].Key_name].column_name.push(quote + arrIndices[i].Column_name + quote);
                                 } else {
                                     objPgIndices[arrIndices[i].Key_name] = {
                                         is_unique   : arrIndices[i].Non_unique === 0 ? true : false,
@@ -1533,26 +1530,21 @@ function processIndexAndKey(tableName) {
                                                     sql       = 'ALTER TABLE "' + self._schema + '".' + quotedTableName + ' '
                                                               + 'ADD PRIMARY KEY(' + objPgIndices[attr].column_name.join(',') + ');';
 
-                                                } else {
-                                                    // "schema_idxname_{integer}_idx" - is NOT a mistake.
-                                                    let columnName = objPgIndices[attr].column_name[0].slice(1, -1) + cnt++;
-                                                    indexType      = 'index';
-                                                    sql            = 'CREATE ' + (objPgIndices[attr].is_unique ? 'UNIQUE ' : '') + 'INDEX "'
-                                                                   + self._schema + '_' + tableName + '_' + columnName + '_idx" ON "'
-                                                                   + self._schema + '"."' + tableName + '" '
-                                                                   + objPgIndices[attr].Index_type + ' (' + objPgIndices[attr].column_name.join(',') + ');';
-                                                }
-
-                                                pgClient.query(sql, err2 => {
-                                                    done();
+                                                    pgClient.query(sql, err2 => {
+                                                        done();
 
                                                     if (err2) {
                                                         generateError('\t--[processIndexAndKey] ' + err2, sql);
                                                         resolveProcessIndexAndKeySql();
                                                     } else {
-                                                        resolveProcessIndexAndKeySql();
+
                                                     }
-                                                });
+                                                    });
+
+                                                } else {
+                                                    done();
+                                                    resolveProcessIndexAndKeySql();
+                                                }
                                             }
                                         });
                                     })

@@ -26,7 +26,7 @@
     "target" : {
             "host"     : "localhost",
             "port"     : 5432,
-            "database" : "allegro2",
+            "database" : "allegro",
             "charset"  : "UTF8",
             "user"     : "my_root",
             "password" : "my_root"
