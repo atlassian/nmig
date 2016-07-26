@@ -809,7 +809,8 @@ function processForeignKeyWorker(tableName, rows) {
                             generateError('\t--[processForeignKeyWorker] Cannot connect to PostgreSQL server...');
                             resolveConstraintPromise();
                         } else {
-                            let sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName + ' ADD FOREIGN KEY ('
+                            let sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName +
+                                      ' ADD CONSTRAINT ' + attr +' FOREIGN KEY ('
                                     + objConstraints[attr].column_name.join(',') + ') REFERENCES "' + self._schema + '".'
                                     + objConstraints[attr].referenced_table_name + ' (' + objConstraints[attr].referenced_column_name.join(',')
                                     + ') ON UPDATE ' + objConstraints[attr].update_rule + ' ON DELETE ' + objConstraints[attr].delete_rule + ';';
@@ -1285,6 +1286,10 @@ function processNull(tableName) {
                         });
                     })
                 );
+            }
+            else
+            {
+                log( self._dicTables[tableName].arrTableColumns[i].Field + "is nullable: " + self._dicTables[tableName].arrTableColumns[i].Null, self._dicTables[tableName].tableLogPath);
             }
         }
 
