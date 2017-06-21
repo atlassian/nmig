@@ -176,7 +176,7 @@ function isFloatNumeric(value) {
  */
 function isBoolean(value) {
     let lcValue = (value || '').toLowerCase();
-    return ['true', 'false', "b'0'", "b'1'"].some(boolExpression => boolExpression === lcValue);
+    return ['true', 'false'].some(boolExpression => boolExpression === lcValue);
 }
 
 /**
@@ -1373,7 +1373,9 @@ function processDefault(tableName) {
             'NULL'                : 'NULL',
             'UTC_DATE'            : "(CURRENT_DATE AT TIME ZONE 'UTC')",
             'UTC_TIME'            : "(CURRENT_TIME AT TIME ZONE 'UTC')",
-            'UTC_TIMESTAMP'       : "(NOW() AT TIME ZONE 'UTC')"
+            'UTC_TIMESTAMP'       : "(NOW() AT TIME ZONE 'UTC')",
+            "B'1'"                : "TRUE",
+            "B'0'"                : "FALSE"
         };
 
         for (let i = 0; i < self._dicTables[tableName].arrTableColumns.length; ++i) {
@@ -1392,8 +1394,8 @@ function processDefault(tableName) {
                                 let sql = 'ALTER TABLE "' + self._schema + '".' + quotedTableName
                                         + ' ' + 'ALTER COLUMN '+ quoteIdentifier(tableName, self._dicTables[tableName].arrTableColumns[i].Field) + ' SET DEFAULT ';
 
-                                if (sqlReservedValues[defaultValue]) {
-                                    sql += sqlReservedValues[defaultValue] + ';';
+                                if (defaultValue && sqlReservedValues[defaultValue.toUpperCase()]) {
+                                    sql += sqlReservedValues[defaultValue.toUpperCase()] + ';';
                                 } else {
                                     sql += isFloatNumeric(defaultValue) || isBoolean(defaultValue)
                                            ? defaultValue + ';'
