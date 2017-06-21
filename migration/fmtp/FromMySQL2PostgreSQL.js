@@ -792,15 +792,14 @@ function processForeignKeyWorker(tableName, rows) {
 
 
         for (let i = 0; i < rows.length; ++i) {
-            let referencedTableQuote = quoteCharacter(rows[i].REFERENCED_TABLE_NAME);
             if (rows[i].CONSTRAINT_NAME in objConstraints) {
                 objConstraints[rows[i].CONSTRAINT_NAME].column_name.push(quoteIdentifier(tableName, rows[i].COLUMN_NAME));
-                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name.push(referencedTableQuote + rows[i].REFERENCED_COLUMN_NAME + referencedTableQuote);
+                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name.push(quoteIdentifier(rows[i].REFERENCED_TABLE_NAME, rows[i].REFERENCED_COLUMN_NAME));
             } else {
                 objConstraints[rows[i].CONSTRAINT_NAME]                        = Object.create(null);
                 objConstraints[rows[i].CONSTRAINT_NAME].column_name            = [quoteIdentifier(tableName, rows[i].COLUMN_NAME)];
-                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name = [referencedTableQuote + rows[i].REFERENCED_COLUMN_NAME + referencedTableQuote];
-                objConstraints[rows[i].CONSTRAINT_NAME].referenced_table_name  = referencedTableQuote + rows[i].REFERENCED_TABLE_NAME + referencedTableQuote;
+                objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name = [quoteIdentifier(rows[i].REFERENCED_TABLE_NAME, rows[i].REFERENCED_COLUMN_NAME)];
+                objConstraints[rows[i].CONSTRAINT_NAME].referenced_table_name  = quoteTableName(rows[i].REFERENCED_TABLE_NAME);
                 objConstraints[rows[i].CONSTRAINT_NAME].update_rule            = rows[i].UPDATE_RULE;
                 objConstraints[rows[i].CONSTRAINT_NAME].delete_rule            = rows[i].DELETE_RULE;
             }
